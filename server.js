@@ -4,6 +4,8 @@ require("dotenv").config();
 
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
+const relationshipRoutes = require("./routes/relationshipRoutes");
+const peopleRoutes = require("./routes/peopleRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +17,8 @@ app.use(express.json());
 // Routes
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
+app.use("/relationships", relationshipRoutes);
+app.use("/people", peopleRoutes);
 
 // Health check
 app.get("/", (req, res) => res.send("Server is running"));

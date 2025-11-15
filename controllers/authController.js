@@ -168,10 +168,15 @@ exports.login = async (req, res) => {
 
     if (userError) return res.status(400).json({ error: userError.message });
 
-    // 3. Return session and role
+    // 3. Return session with custom expiration timestamp
+    // Client will handle expiration, not Supabase
     res.json({
       message: "Login successful",
-      session: authData.session,
+      session: {
+        access_token: authData.session.access_token,
+        refresh_token: authData.session.refresh_token,
+        expires_at: Date.now() + 3600000, // 1 hour from now (client-side expiration)
+      },
       user: { id: userData.id, email: userData.email, role: userData.role },
     });
   } catch (err) {
