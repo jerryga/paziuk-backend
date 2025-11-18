@@ -124,3 +124,74 @@ exports.searchPeople = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
+// Story
+exports.savePersonStory = async (req, res) => {
+  const { personId, storyText } = req.body;
+  const { data, error } = await supabase
+    .from("people")
+    .update({ story: storyText })
+    .eq("id", personId);
+
+  if (error) {
+    console.error("Failed to save story", error);
+    res.status(400).json({ error: error.message });
+    return;
+  }
+  res.json(data);
+}
+
+exports.getPersonDetails = async (req, res) => {
+  const { id } = req.params;
+
+  const { data: person, error } = await supabase
+    .from("people")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.error("Failed to get person details", error);
+    res.status(400).json({ error: error.message });
+    return;
+  }
+
+  if (person.story) {
+    const html = await renderStoryToHTML(person.story);
+    res.json({ ...person, storyHTML: html || "" });
+  } else {
+    res.json({ ...person, storyHTML: "" });
+  }
+};
+
+async function renderStoryToHTML(storyText) {
+  // get all unique IDs mentioned in the story
+  const ids = Array.from(
+    new Set(
+      Array.from(storyText.matchAll(/\[person:(\d+)\]/g)).map((m) =>
+        Number(m[1])
+      )
+    )
+  );
+
+  // fetch only those people
+  const { data, error } = await supabase
+    .from("people")
+    .select("id, first_name, middle_name, last_name")
+    .in("id", ids);
+
+  const nameMap = {};
+  (data || []).forEach((p) => {
+    nameMap[p.id] = buildPersonName(p);
+  });
+
+  const safe = (s) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  return storyText.replace(/\[person:(\d+)\]/g, (match, id) => {
+    const name = nameMap[id] ?? `Unknown (${id})`;
+    return `<a href="/person.html?id=${id}" class="person-link">${safe(
+      name
+    )}</a>`;
+  });
+}

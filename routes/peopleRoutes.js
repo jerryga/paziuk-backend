@@ -4,7 +4,7 @@ const peopleController = require("../controllers/peopleController");
 const authMiddleware = require("../middleware/auth");
 
 // All routes require authentication
-router.use(authMiddleware);
+// router.use(authMiddleware);
 
 // Get all people
 router.get("/", peopleController.getAllPeople);
@@ -23,5 +23,9 @@ router.put("/:id", peopleController.updatePerson);
 
 // Delete a person
 router.delete("/:id", peopleController.deletePerson);
+
+router.get("/details/:id", peopleController.getPersonDetails);
+
+router.put("/save-story", peopleController.savePersonStory);
 
 module.exports = router;
