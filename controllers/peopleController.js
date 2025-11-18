@@ -127,19 +127,22 @@ exports.searchPeople = async (req, res) => {
 
 // Story
 exports.savePersonStory = async (req, res) => {
-  const { personId, storyText } = req.body;
+  const id = Number(req.params.id);
+  const { story } = req.body;
+
+  if (isNaN(id)) return res.status(400).json({ error: "Invalid person ID" });
+
   const { data, error } = await supabase
     .from("people")
-    .update({ story: storyText })
-    .eq("id", personId);
+    .update({ story })
+    .eq("id", id)
+    .select()
+    .single();
 
-  if (error) {
-    console.error("Failed to save story", error);
-    res.status(400).json({ error: error.message });
-    return;
-  }
-  res.json(data);
-}
+  if (error) return res.status(400).json({ error: error.message });
+
+  return res.json(data);
+};
 
 exports.getPersonDetails = async (req, res) => {
   const { id } = req.params;
@@ -164,13 +167,11 @@ exports.getPersonDetails = async (req, res) => {
   }
 };
 
-async function renderStoryToHTML(storyText) {
+async function renderStoryToHTML(story) {
   // get all unique IDs mentioned in the story
   const ids = Array.from(
     new Set(
-      Array.from(storyText.matchAll(/\[person:(\d+)\]/g)).map((m) =>
-        Number(m[1])
-      )
+      Array.from(story.matchAll(/\[person:(\d+)\]/g)).map((m) => Number(m[1]))
     )
   );
 
@@ -188,7 +189,7 @@ async function renderStoryToHTML(storyText) {
   const safe = (s) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  return storyText.replace(/\[person:(\d+)\]/g, (match, id) => {
+  return story.replace(/\[person:(\d+)\]/g, (match, id) => {
     const name = nameMap[id] ?? `Unknown (${id})`;
     return `<a href="/person.html?id=${id}" class="person-link">${safe(
       name

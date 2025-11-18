@@ -26,6 +26,6 @@ router.delete("/:id", peopleController.deletePerson);
 
 router.get("/details/:id", peopleController.getPersonDetails);
 
-router.put("/save-story", peopleController.savePersonStory);
+router.put("/:id/story", peopleController.savePersonStory);
 
 module.exports = router;
