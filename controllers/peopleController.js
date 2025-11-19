@@ -175,6 +175,8 @@ async function renderStoryToHTML(story) {
     )
   );
 
+  console.log("rednering story, found person IDs:", ids);
+
   // fetch only those people
   const { data, error } = await supabase
     .from("people")
@@ -183,14 +185,18 @@ async function renderStoryToHTML(story) {
 
   const nameMap = {};
   (data || []).forEach((p) => {
-    nameMap[p.id] = buildPersonName(p);
+    nameMap[p.id] = formatPersonName(p);
   });
 
+  console.log("Fetched person names for story rendering:", nameMap);
+
   const safe = (s) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    typeof s === "string"
+      ? s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      : "";
 
   return story.replace(/\[person:(\d+)\]/g, (match, id) => {
-    const name = nameMap[id] ?? `Unknown (${id})`;
+    const name = nameMap[id]["name"] ?? `Unknown (${id})`;
     return `<a href="/person.html?id=${id}" class="person-link">${safe(
       name
     )}</a>`;
