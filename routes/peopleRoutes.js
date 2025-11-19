@@ -4,7 +4,7 @@ const peopleController = require("../controllers/peopleController");
 const authMiddleware = require("../middleware/auth");
 
 // All routes require authentication
-// router.use(authMiddleware);
+router.use(authMiddleware);
 
 // Get all people
 router.get("/", peopleController.getAllPeople);

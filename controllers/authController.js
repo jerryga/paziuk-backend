@@ -20,11 +20,6 @@ exports.signup = async (req, res) => {
       .ilike("first_name", first_name)
       .eq("birth_date", birth_date);
 
-    console.log("Query conditions:");
-    console.log("  - first_name (ilike):", first_name);
-    console.log("  - birth_date (eq):", birth_date);
-
-    // Handle nullable middle_name
     if (
       middle_name !== null &&
       middle_name !== undefined &&
@@ -37,7 +32,6 @@ exports.signup = async (req, res) => {
       console.log("  - middle_name (is null): true");
     }
 
-    // Handle nullable last_name
     if (last_name !== null && last_name !== undefined && last_name !== "") {
       query = query.ilike("last_name", last_name);
       console.log("  - last_name (ilike):", last_name);
@@ -47,10 +41,6 @@ exports.signup = async (req, res) => {
     }
 
     const { data: personData, error: personError } = await query.maybeSingle();
-
-    console.log("Query result:");
-    console.log("  - data:", personData);
-    console.log("  - error:", personError);
 
     if (personError) {
       console.error("Person lookup query error:", personError);
@@ -93,20 +83,7 @@ exports.signup = async (req, res) => {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          person_id: personData.id,
-          name: `${personData.first_name} ${
-            personData.middle_name ? personData.middle_name + " " : ""
-          }${personData.last_name ? personData.last_name : ""}`.trim(),
-          role: personData.role,
-        },
-      },
     });
-
-    console.log("Auth signup result:");
-    console.log("  - user:", authData?.user?.id);
-    console.log("  - error:", authError);
 
     if (authError) {
       console.error("Auth signup failed:", authError);
@@ -122,14 +99,14 @@ exports.signup = async (req, res) => {
           email,
           person_id: personData.id,
           role: personData.role,
+          first_name: personData.first_name,
+          middle_name: personData.middle_name,
+          last_name: personData.last_name,
+          birth_date: personData.birth_date,
         },
       ])
       .select()
       .single();
-
-    console.log("User table insert result:");
-    console.log("  - data:", userData);
-    console.log("  - error:", userError);
 
     if (userError) {
       console.error("User table insert failed:", userError);
@@ -137,11 +114,22 @@ exports.signup = async (req, res) => {
     }
 
     // 3. Return session and role
-    console.log("=== Signup Successful ===");
+    console.log("=== Signup Successful ===", personData);
+    console.log("=== User Data ===", userData);
+
     res.json({
       message: "Signup successful",
       session: authData.session,
-      user: { id: userData.id, email: userData.email, role: userData.role },
+      user: {
+        id: userData.id,
+        email: userData.email,
+        person_id: userData.person_id,
+        role: userData.role,
+        first_name: userData.first_name,
+        middle_name: userData.middle_name,
+        last_name: userData.last_name,
+        birth_date: userData.birth_date,
+      },
     });
   } catch (err) {
     console.error("=== Signup Error ===");
@@ -162,12 +150,14 @@ exports.login = async (req, res) => {
     // 2. Fetch role from 'users' table
     const { data: userData, error: userError } = await supabase
       .from("users")
-      .select("id, email, role")
+      .select(
+        "id, email, role, person_id,first_name, middle_name, last_name, birth_date"
+      )
       .eq("id", authData.user.id)
       .single();
 
     if (userError) return res.status(400).json({ error: userError.message });
-
+    console.log("=== Login Successful ===", userData);
     // 3. Return session with custom expiration timestamp
     // Client will handle expiration, not Supabase
     res.json({
@@ -177,7 +167,16 @@ exports.login = async (req, res) => {
         refresh_token: authData.session.refresh_token,
         expires_at: Date.now() + 3600000, // 1 hour from now (client-side expiration)
       },
-      user: { id: userData.id, email: userData.email, role: userData.role },
+      user: {
+        id: userData.id,
+        email: userData.email,
+        person_id: userData.person_id,
+        role: userData.role,
+        first_name: userData.first_name,
+        middle_name: userData.middle_name,
+        last_name: userData.last_name,
+        birth_date: userData.birth_date,
+      },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

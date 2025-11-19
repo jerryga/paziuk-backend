@@ -71,7 +71,7 @@ exports.updatePerson = async (req, res) => {
   try {
     const { id } = req.params;
     const personData = req.body;
-
+    console.log("Updating person ID:", id, "with data:", personData);
     const { data, error } = await supabase
       .from("people")
       .update(personData)
