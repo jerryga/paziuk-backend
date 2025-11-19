@@ -71,15 +71,18 @@ exports.updatePerson = async (req, res) => {
   try {
     const { id } = req.params;
     const personData = req.body;
+
     console.log("Updating person ID:", id, "with data:", personData);
+
     const { data, error } = await supabase
       .from("people")
       .update(personData)
       .eq("id", id)
       .select()
-      .single();
+      .maybeSingle(); // safer than .single()
 
     if (error) throw error;
+
     res.json(formatPersonName(data));
   } catch (error) {
     res.status(400).json({ error: error.message });
