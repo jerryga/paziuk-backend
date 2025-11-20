@@ -43,9 +43,26 @@ function formatRelationships(relationships) {
   }));
 }
 
+exports.getAllFamilyTrees = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("family_tree")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+
+    res.json(data);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 // Get all relationships with related data (people and relationship type)
 exports.getAllRelationships = async (req, res) => {
   try {
+    const familyTreeId = req.query.family_tree_id;
+
     const { data, error } = await supabase
       .from("relationships")
       .select(
@@ -55,9 +72,11 @@ exports.getAllRelationships = async (req, res) => {
         notes,
         parent:people!relationships_parent_id_fkey(id, first_name, middle_name, last_name),
         child:people!relationships_child_id_fkey(id, first_name, middle_name, last_name),
-        relation_type:relationship_type(*)
+        relation_type:relationship_type(*),
+        family_tree:family_tree(id, name)
       `
       )
+      .eq("family_tree_id", familyTreeId) // ← FILTER HERE
       .order("created_at", { ascending: false });
 
     if (error) throw error;
