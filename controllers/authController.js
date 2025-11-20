@@ -1,8 +1,15 @@
 const supabase = require("../supabaseClient");
 
 exports.signup = async (req, res) => {
-  const { email, password, first_name, middle_name, last_name, birth_date } =
-    req.body; // optional: name
+  const {
+    email,
+    password,
+    first_name,
+    middle_name,
+    last_name,
+    birth_date,
+    birth_place,
+  } = req.body; // optional: name
 
   console.log("=== Signup Request ===");
   console.log("Request body:", {
@@ -11,12 +18,15 @@ exports.signup = async (req, res) => {
     middle_name,
     last_name,
     birth_date,
+    birth_place,
   });
 
   try {
     let query = supabase
       .from("people")
-      .select("id, first_name, middle_name, last_name, birth_date, role")
+      .select(
+        "id, first_name, middle_name, last_name, birth_date, birth_place, role"
+      )
       .ilike("first_name", first_name)
       .eq("birth_date", birth_date);
 
@@ -90,6 +100,28 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ error: authError.message });
     }
 
+    //update birth_place if provided
+    if (birth_place) {
+      console.log("Updating birth_place for person: ", personData);
+      const { data, error } = await supabase
+        .from("people")
+        .update({ birth_place })
+        .eq("id", personData.id)
+        .select();
+
+      console.log("update result:", { data, error });
+
+      if (error) {
+        console.error("Failed to update birth_place:", error);
+      } else if (!data || data.length === 0) {
+        console.warn(
+          "Update succeeded but no rows returned — id may not match or RLS blocked it."
+        );
+      } else {
+        personData.birth_place = birth_place;
+        console.log("Updated birth_place for person ID", personData.id);
+      }
+    }
     // 2. Create user record in your 'users' table
     const { data: userData, error: userError } = await supabase
       .from("users")
@@ -103,6 +135,7 @@ exports.signup = async (req, res) => {
           middle_name: personData.middle_name,
           last_name: personData.last_name,
           birth_date: personData.birth_date,
+          birth_place: personData.birth_place || null,
         },
       ])
       .select()
@@ -129,6 +162,7 @@ exports.signup = async (req, res) => {
         middle_name: userData.middle_name,
         last_name: userData.last_name,
         birth_date: userData.birth_date,
+        birth_place: userData.birth_place || null,
       },
     });
   } catch (err) {
