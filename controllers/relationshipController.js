@@ -61,8 +61,8 @@ exports.getAllFamilyTrees = async (req, res) => {
 // Get all relationships with related data (people and relationship type)
 exports.getAllRelationships = async (req, res) => {
   try {
-    const familyTreeId = req.query.family_tree_id;
-
+    const { family_tree_id } = req.params;
+    console.log("Fetching relationships for familyTreeId:", family_tree_id);
     const { data, error } = await supabase
       .from("relationships")
       .select(
@@ -76,7 +76,7 @@ exports.getAllRelationships = async (req, res) => {
         family_tree:family_tree(id, name)
       `
       )
-      .eq("family_tree_id", familyTreeId) // ← FILTER HERE
+      .eq("family_tree_id", family_tree_id) // ← FILTER HERE
       .order("created_at", { ascending: false });
 
     if (error) throw error;
