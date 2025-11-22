@@ -176,30 +176,88 @@ exports.login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
+    // --- NEW: Check Lockout Status ---
+    // Fetch user tracking info by email first (since we don't have the auth ID yet)
+    const { data: userCheck, error: checkError } = await supabase
+      .from("users")
+      .select("id, failed_login_attempts, lockout_until")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (userCheck) {
+      if (
+        userCheck.lockout_until &&
+        new Date(userCheck.lockout_until) > new Date()
+      ) {
+        const expiry = new Date(userCheck.lockout_until);
+        const timeLeftHours = Math.ceil(
+          (expiry - new Date()) / (1000 * 60 * 60)
+        );
+        return res.status(403).json({
+          error: `Account locked due to multiple failed login attempts. Please try again in approximately ${timeLeftHours} hours.`,
+        });
+      }
+    }
+    // ---------------------------------
+
     // 1. Login with Supabase Auth
     const { data: authData, error: authError } =
       await supabase.auth.signInWithPassword({ email, password });
-    if (authError) return res.status(400).json({ error: authError.message });
+
+    // --- NEW: Handle Failed Attempt ---
+    if (authError) {
+      // If the user exists in our public 'users' table, record the failure
+      if (userCheck) {
+        const currentAttempts = userCheck.failed_login_attempts || 0;
+        const newAttempts = currentAttempts + 1;
+        const updates = { failed_login_attempts: newAttempts };
+
+        // If attempts reach 5, set lockout time to 24 hours from now
+        if (newAttempts >= 5) {
+          const lockoutTime = new Date();
+          lockoutTime.setHours(lockoutTime.getHours() + 24);
+          updates.lockout_until = lockoutTime.toISOString();
+        }
+
+        await supabase.from("users").update(updates).eq("id", userCheck.id); // using ID is safer than email here
+      }
+      return res.status(400).json({ error: authError.message });
+    }
+    // ----------------------------------
+
+    // --- NEW: Reset Attempts on Success ---
+    // If login succeeded, clear any previous failed attempts
+    if (
+      userCheck &&
+      (userCheck.failed_login_attempts > 0 || userCheck.lockout_until)
+    ) {
+      await supabase
+        .from("users")
+        .update({ failed_login_attempts: 0, lockout_until: null })
+        .eq("id", authData.user.id);
+    }
+    // --------------------------------------
 
     // 2. Fetch role from 'users' table
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select(
-        "id, email, role, person_id,first_name, middle_name, last_name, birth_date"
+        "id, email, role, person_id, first_name, middle_name, last_name, birth_date"
       )
       .eq("id", authData.user.id)
       .single();
 
     if (userError) return res.status(400).json({ error: userError.message });
+
     console.log("=== Login Successful ===", userData);
+
     // 3. Return session with custom expiration timestamp
-    // Client will handle expiration, not Supabase
     res.json({
       message: "Login successful",
       session: {
         access_token: authData.session.access_token,
         refresh_token: authData.session.refresh_token,
-        expires_at: Date.now() + 3600000, // 1 hour from now (client-side expiration)
+        expires_at: Date.now() + 3600000, // 1 hour from now
       },
       user: {
         id: userData.id,
