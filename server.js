@@ -9,7 +9,6 @@ const peopleRoutes = require("./routes/peopleRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
@@ -26,6 +25,7 @@ app.use("/contact", contactRoutes);
 app.get("/", (req, res) => res.send("Server is running"));
 
 // Start server
-app.listen(PORT, () =>
-  console.log(`Server running on http://localhost:${PORT}`)
-);
+const port = process.env.PORT || 8080;
+app.listen(port, () => {
+  console.log(`Family Tree app listening on port ${port}`);
+});
