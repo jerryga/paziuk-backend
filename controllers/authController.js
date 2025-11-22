@@ -9,19 +9,10 @@ exports.signup = async (req, res) => {
     last_name,
     birth_date,
     birth_place,
-  } = req.body; // optional: name
-
-  console.log("=== Signup Request ===");
-  console.log("Request body:", {
-    email,
-    first_name,
-    middle_name,
-    last_name,
-    birth_date,
-    birth_place,
-  });
+  } = req.body;
 
   try {
+    // 0. Find existing person row
     let query = supabase
       .from("people")
       .select(
@@ -36,57 +27,24 @@ exports.signup = async (req, res) => {
       middle_name !== ""
     ) {
       query = query.ilike("middle_name", middle_name);
-      console.log("  - middle_name (ilike):", middle_name);
     } else {
       query = query.is("middle_name", null);
-      console.log("  - middle_name (is null): true");
     }
 
     if (last_name !== null && last_name !== undefined && last_name !== "") {
       query = query.ilike("last_name", last_name);
-      console.log("  - last_name (ilike):", last_name);
     } else {
       query = query.is("last_name", null);
-      console.log("  - last_name (is null): true");
     }
 
     const { data: personData, error: personError } = await query.maybeSingle();
-
     if (personError) {
-      console.error("Person lookup query error:", personError);
-      return res.status(500).json({
-        error: "Database query failed",
-        details: personError.message,
-      });
+      return res
+        .status(500)
+        .json({ error: "Database query failed", details: personError.message });
     }
-
     if (!personData) {
-      console.error("Person not found with criteria");
-
-      // Try to find similar records for debugging
-      const { data: similarPeople } = await supabase
-        .from("people")
-        .select("id, first_name, middle_name, last_name, birth_date")
-        .ilike("first_name", first_name)
-        .limit(5);
-
-      console.log(
-        "Similar people found with matching first name:",
-        similarPeople
-      );
-
-      return res.status(404).json({
-        error: "Person not found",
-        details: "No person matches the provided name and birth date",
-        searchCriteria: {
-          first_name,
-          middle_name: middle_name || null,
-          last_name: last_name || null,
-          birth_date,
-        },
-        hint: "Check if the person exists in the database with the exact name and birth date",
-        similarRecords: similarPeople,
-      });
+      return res.status(404).json({ error: "Person not found" });
     }
 
     // 1. Sign up with Supabase Auth
@@ -94,40 +52,18 @@ exports.signup = async (req, res) => {
       email,
       password,
     });
-
     if (authError) {
-      console.error("Auth signup failed:", authError);
       return res.status(400).json({ error: authError.message });
     }
 
-    //update birth_place if provided
-    if (birth_place) {
-      console.log("Updating birth_place for person: ", personData);
-      const { data, error } = await supabase
-        .from("people")
-        .update({ birth_place })
-        .eq("id", personData.id)
-        .select();
+    const authUserId = authData.user.id;
 
-      console.log("update result:", { data, error });
-
-      if (error) {
-        console.error("Failed to update birth_place:", error);
-      } else if (!data || data.length === 0) {
-        console.warn(
-          "Update succeeded but no rows returned — id may not match or RLS blocked it."
-        );
-      } else {
-        personData.birth_place = birth_place;
-        console.log("Updated birth_place for person ID", personData.id);
-      }
-    }
-    // 2. Create user record in your 'users' table
+    // 2. Insert a row in `users` linking the new auth user to the person
     const { data: userData, error: userError } = await supabase
       .from("users")
       .insert([
         {
-          id: authData.user.id,
+          id: authUserId,
           email,
           person_id: personData.id,
           role: personData.role,
@@ -142,14 +78,34 @@ exports.signup = async (req, res) => {
       .single();
 
     if (userError) {
+      // Consider cleaning up the auth user if you don't want orphan auth accounts
       console.error("User table insert failed:", userError);
       return res.status(400).json({ error: userError.message });
     }
 
-    // 3. Return session and role
-    console.log("=== Signup Successful ===", personData);
-    console.log("=== User Data ===", userData);
+    // 3. Now update the people row (this should pass the RLS policy since users row exists)
+    if (birth_place) {
+      const { data: updatedPeople, error: updateError } = await supabase
+        .from("people")
+        .update({ birth_place })
+        .eq("id", personData.id)
+        .select()
+        .single();
 
+      if (updateError) {
+        // If this fails, it may be an RLS/policy issue or other DB error
+        console.error("Failed to update birth_place:", updateError);
+        // Decide whether to rollback the users insert or inform the user — here we return an error
+        return res.status(500).json({
+          error: "Failed to update people row",
+          details: updateError.message,
+        });
+      } else {
+        personData.birth_place = updatedPeople.birth_place;
+      }
+    }
+
+    // 4. Return session and user info
     res.json({
       message: "Signup successful",
       session: authData.session,
@@ -162,12 +118,11 @@ exports.signup = async (req, res) => {
         middle_name: userData.middle_name,
         last_name: userData.last_name,
         birth_date: userData.birth_date,
-        birth_place: userData.birth_place || null,
+        birth_place: personData.birth_place || null,
       },
     });
   } catch (err) {
-    console.error("=== Signup Error ===");
-    console.error("Error:", err);
+    console.error("Signup error:", err);
     res.status(500).json({ error: err.message });
   }
 };

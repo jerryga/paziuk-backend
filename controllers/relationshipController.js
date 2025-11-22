@@ -45,6 +45,11 @@ function formatRelationships(relationships) {
 
 exports.getAllFamilyTrees = async (req, res) => {
   try {
+    console.log(
+      "Service Role Key Loaded:",
+      !!process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
     const { data, error } = await supabase
       .from("family_tree")
       .select("*")
@@ -52,8 +57,10 @@ exports.getAllFamilyTrees = async (req, res) => {
 
     if (error) throw error;
 
+    console.log("Family Trees found:", data.length); // Log the count
     res.json(data);
   } catch (error) {
+    console.error("Error fetching family trees:", error);
     res.status(400).json({ error: error.message });
   }
 };
