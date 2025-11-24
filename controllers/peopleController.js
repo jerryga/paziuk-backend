@@ -140,8 +140,8 @@ exports.savePersonStory = async (req, res) => {
     .update({ story })
     .eq("id", id)
     .select()
-    .single();
-
+    .maybeSingle();
+  console.log("Saved story for person ID:", id, "Result:", data, error);
   if (error) return res.status(400).json({ error: error.message });
 
   return res.json(data);
@@ -200,8 +200,6 @@ async function renderStoryToHTML(story) {
 
   return story.replace(/\[person:(\d+)\]/g, (match, id) => {
     const name = nameMap[id]["name"] ?? `Unknown (${id})`;
-    return `<a href="/person.html?id=${id}" class="person-link">${safe(
-      name
-    )}</a>`;
+    return `<a href="/person.html?id=${id}">${safe(name)}</a>`;
   });
 }
