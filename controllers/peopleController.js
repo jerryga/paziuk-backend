@@ -200,6 +200,6 @@ async function renderStoryToHTML(story) {
 
   return story.replace(/\[person:(\d+)\]/g, (match, id) => {
     const name = nameMap[id]["name"] ?? `Unknown (${id})`;
-    return `<a href="/person.html?id=${id}">${safe(name)}</a>`;
+    return `<a href="/pages/person.html?id=${id}">${safe(name)}</a>`;
   });
 }
