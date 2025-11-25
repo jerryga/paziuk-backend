@@ -9,7 +9,7 @@ router.post("/", async (req, res) => {
 
     const data = await resend.emails.send({
       from: "onboarding@resend.dev",
-      to: "chasonjia.dev@gmail.com",
+      to: "davidpaziuk@gmail.com",
       subject: "New Contact From Family Tree Website",
       html: `
         <h3>New Contact</h3>
