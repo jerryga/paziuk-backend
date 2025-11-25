@@ -131,18 +131,28 @@ exports.searchPeople = async (req, res) => {
 // Story
 exports.savePersonStory = async (req, res) => {
   const id = Number(req.params.id);
-  const { story } = req.body;
+  const { story, birth_date } = req.body;
 
   if (isNaN(id)) return res.status(400).json({ error: "Invalid person ID" });
 
+  const updateData = { story };
+  if (birth_date) {
+    updateData.birth_date = birth_date;
+  }
+
   const { data, error } = await supabase
     .from("people")
-    .update({ story })
+    .update(updateData)
     .eq("id", id)
     .select()
     .maybeSingle();
+
   console.log("Saved story for person ID:", id, "Result:", data, error);
   console.log("Story content:", story);
+  if (birth_date) {
+    console.log("Updated birth_date:", birth_date);
+  }
+
   if (error) return res.status(400).json({ error: error.message });
 
   return res.json(data);
