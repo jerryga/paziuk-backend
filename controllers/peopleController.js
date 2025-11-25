@@ -142,31 +142,106 @@ exports.savePersonStory = async (req, res) => {
     .select()
     .maybeSingle();
   console.log("Saved story for person ID:", id, "Result:", data, error);
+  console.log("Story content:", story);
   if (error) return res.status(400).json({ error: error.message });
 
   return res.json(data);
 };
 
 exports.getPersonDetails = async (req, res) => {
-  const { id } = req.params;
+  const id = Number(req.params.id);
 
-  const { data: person, error } = await supabase
-    .from("people")
-    .select("*")
-    .eq("id", id)
-    .single();
+  try {
+    // 1. Fetch current person
+    const { data: person, error } = await supabase
+      .from("people")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-  if (error) {
-    console.error("Failed to get person details", error);
+    if (error) throw error;
+
+    // 2. Fetch Parents (find relationships where this person is the child)
+    const { data: parentRels } = await supabase
+      .from("relationships")
+      .select("parent_id, family_tree_id")
+      .eq("child_id", id);
+
+    const familyTreeId =
+      parentRels.length > 0 ? parentRels[0].family_tree_id : null;
+
+    let ancestorIds = [];
+    if (familyTreeId) {
+      console.log(`Person ID ${id} belongs to Family Tree ID ${familyTreeId}`);
+      const { data: tree } = await supabase
+        .from("family_tree")
+        .select("ancestor")
+        .eq("id", familyTreeId)
+        .maybeSingle();
+      if (tree && tree.ancestor && tree.ancestor !== id) {
+        ancestorIds.push(tree.ancestor);
+      }
+    }
+
+    const parentIds = (parentRels || []).map((r) => r.parent_id);
+    // Ensure ancestorIds are not included in parentIds
+    const filteredParentIds = parentIds.filter(
+      (pid) => !ancestorIds.includes(pid)
+    );
+
+    let siblingIds = [];
+    if (filteredParentIds.length > 0) {
+      const { data: siblingRels } = await supabase
+        .from("relationships")
+        .select("child_id")
+        .in("parent_id", filteredParentIds)
+        .neq("child_id", id);
+
+      // Unique set of sibling IDs
+      siblingIds = [...new Set((siblingRels || []).map((r) => r.child_id))];
+    }
+
+    // 4. Fetch details for all related people (parents + siblings)
+    const relatedIds = [
+      ...new Set([...ancestorIds, ...filteredParentIds, ...siblingIds]),
+    ];
+    const relatedMap = {};
+
+    if (relatedIds.length > 0) {
+      const { data: relatives } = await supabase
+        .from("people")
+        .select("id, first_name, middle_name, last_name")
+        .in("id", relatedIds);
+
+      (relatives || []).forEach((p) => {
+        relatedMap[p.id] = formatPersonName(p);
+      });
+    }
+
+    // 5. Prepare response arrays
+    const ancestors = ancestorIds.map((aid) => relatedMap[aid]).filter(Boolean);
+    const parents = filteredParentIds
+      .map((pid) => relatedMap[pid])
+      .filter(Boolean);
+    const siblings = siblingIds.map((sid) => relatedMap[sid]).filter(Boolean);
+
+    // 6. Render Story HTML
+    let storyHTML = "";
+    if (person.story) {
+      storyHTML = (await renderStoryToHTML(person.story)) || "";
+    }
+
+    // 7. Return combined data
+    res.json({
+      ...formatPersonName(person),
+      storyHTML,
+      ancestors,
+      parents,
+      siblings,
+    });
+  } catch (error) {
+    console.error("Error fetching person details:", error);
     res.status(400).json({ error: error.message });
-    return;
-  }
-
-  if (person.story) {
-    const html = await renderStoryToHTML(person.story);
-    res.json({ ...person, storyHTML: html || "" });
-  } else {
-    res.json({ ...person, storyHTML: "" });
   }
 };
 
