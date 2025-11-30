@@ -212,7 +212,7 @@ exports.login = async (req, res) => {
       session: {
         access_token: authData.session.access_token,
         refresh_token: authData.session.refresh_token,
-        expires_at: Date.now() + 3600000, // 1 hour from now
+        expires_at: Date.now() + 3600000 * 4, // 4 hours from now
       },
       user: {
         id: userData.id,

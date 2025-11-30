@@ -72,8 +72,6 @@ exports.updatePerson = async (req, res) => {
     const { id } = req.params;
     const personData = req.body;
 
-    console.log("Updating person ID:", id, "with data:", personData);
-
     const { data, error } = await supabase
       .from("people")
       .update(personData)
@@ -146,13 +144,7 @@ exports.savePersonStory = async (req, res) => {
     .eq("id", id)
     .select()
     .maybeSingle();
-
-  console.log("Saved story for person ID:", id, "Result:", data, error);
-  console.log("Story content:", story);
-  if (birth_date) {
-    console.log("Updated birth_date:", birth_date);
-  }
-
+  console.log("Save story update result:", data, error);
   if (error) return res.status(400).json({ error: error.message });
 
   return res.json(data);
@@ -182,7 +174,6 @@ exports.getPersonDetails = async (req, res) => {
 
     let ancestorIds = [];
     if (familyTreeId) {
-      console.log(`Person ID ${id} belongs to Family Tree ID ${familyTreeId}`);
       const { data: tree } = await supabase
         .from("family_tree")
         .select("ancestor")
@@ -263,8 +254,6 @@ async function renderStoryToHTML(story) {
     )
   );
 
-  console.log("rednering story, found person IDs:", ids);
-
   // fetch only those people
   const { data, error } = await supabase
     .from("people")
@@ -275,8 +264,6 @@ async function renderStoryToHTML(story) {
   (data || []).forEach((p) => {
     nameMap[p.id] = formatPersonName(p);
   });
-
-  console.log("Fetched person names for story rendering:", nameMap);
 
   const safe = (s) =>
     typeof s === "string"
