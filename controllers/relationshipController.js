@@ -77,8 +77,8 @@ exports.getAllRelationships = async (req, res) => {
         id,
         created_at,
         notes,
-        parent:people!relationships_parent_id_fkey(id, first_name, middle_name, last_name),
-        child:people!relationships_child_id_fkey(id, first_name, middle_name, last_name),
+        parent:people!relationships_parent_id_fkey(id, first_name, middle_name, last_name, birth_date),
+        child:people!relationships_child_id_fkey(id, first_name, middle_name, last_name, birth_date),
         relation_type:relationship_type(*),
         family_tree:family_tree(id, name)
       `
@@ -87,7 +87,23 @@ exports.getAllRelationships = async (req, res) => {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    res.json(formatRelationships(data));
+
+    // Sort relationships by parent birth_date, then child birth_date
+    const sortedData = data.sort((a, b) => {
+      const aParentDate = a.parent?.birth_date || "9999-12-31";
+      const bParentDate = b.parent?.birth_date || "9999-12-31";
+      const aChildDate = a.child?.birth_date || "9999-12-31";
+      const bChildDate = b.child?.birth_date || "9999-12-31";
+
+      // First sort by parent birth_date
+      if (aParentDate !== bParentDate) {
+        return aParentDate.localeCompare(bParentDate);
+      }
+      // Then by child birth_date
+      return aChildDate.localeCompare(bChildDate);
+    });
+
+    res.json(formatRelationships(sortedData));
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
