@@ -14,7 +14,8 @@ function formatPersonName(person) {
   };
 }
 
-// Get all people
+// ... [Existing methods: getAllPeople, getPersonById, createPerson, updatePerson, deletePerson, searchPeople, savePersonStory] ...
+
 exports.getAllPeople = async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -31,7 +32,6 @@ exports.getAllPeople = async (req, res) => {
   }
 };
 
-// Get person by ID
 exports.getPersonById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -48,11 +48,9 @@ exports.getPersonById = async (req, res) => {
   }
 };
 
-// Create a new person
 exports.createPerson = async (req, res) => {
   try {
     const personData = req.body;
-
     const { data, error } = await supabase
       .from("people")
       .insert([personData])
@@ -66,28 +64,24 @@ exports.createPerson = async (req, res) => {
   }
 };
 
-// Update a person
 exports.updatePerson = async (req, res) => {
   try {
     const { id } = req.params;
     const personData = req.body;
-
     const { data, error } = await supabase
       .from("people")
       .update(personData)
       .eq("id", id)
       .select()
-      .maybeSingle(); // safer than .single()
+      .maybeSingle();
 
     if (error) throw error;
-
     res.json(formatPersonName(data));
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 };
 
-// Delete a person
 exports.deletePerson = async (req, res) => {
   try {
     const { id } = req.params;
@@ -100,15 +94,12 @@ exports.deletePerson = async (req, res) => {
   }
 };
 
-// Search people by name
 exports.searchPeople = async (req, res) => {
   try {
     const { q } = req.query;
-
     if (!q) {
       return res.status(400).json({ error: "Search query is required" });
     }
-
     const { data, error } = await supabase
       .from("people")
       .select("*")
@@ -118,7 +109,6 @@ exports.searchPeople = async (req, res) => {
       .order("first_name", { ascending: true });
 
     if (error) throw error;
-
     const formattedPeople = data.map(formatPersonName);
     res.json(formattedPeople);
   } catch (error) {
@@ -126,18 +116,14 @@ exports.searchPeople = async (req, res) => {
   }
 };
 
-// Story
 exports.savePersonStory = async (req, res) => {
   const id = Number(req.params.id);
   const { story, birth_date } = req.body;
-
   if (isNaN(id)) return res.status(400).json({ error: "Invalid person ID" });
-
   const updateData = { story };
   if (birth_date) {
     updateData.birth_date = birth_date;
   }
-
   const { data, error } = await supabase
     .from("people")
     .update(updateData)
@@ -145,11 +131,13 @@ exports.savePersonStory = async (req, res) => {
     .select()
     .maybeSingle();
   console.log("Save story update result:", data, error);
+  if (data == null)
+    return res.status(404).json({ error: "Person not found! Try again." });
   if (error) return res.status(400).json({ error: error.message });
-
   return res.json(data);
 };
 
+// Modified getPersonDetails
 exports.getPersonDetails = async (req, res) => {
   const id = Number(req.params.id);
 
@@ -163,82 +151,136 @@ exports.getPersonDetails = async (req, res) => {
 
     if (error) throw error;
 
-    // 2. Fetch Parents (find relationships where this person is the child)
-    const { data: parentRels } = await supabase
-      .from("relationships")
-      .select("parent_id, family_tree_id")
-      .eq("child_id", id);
+    // --- Helper Methods ---
+    const getParentsIds = async (childIds) => {
+      if (!childIds || childIds.length === 0) return [];
+      const { data } = await supabase
+        .from("relationships")
+        .select("parent_id")
+        .in("child_id", childIds);
+      return [...new Set((data || []).map((r) => r.parent_id))];
+    };
 
-    const familyTreeId =
-      parentRels.length > 0 ? parentRels[0].family_tree_id : null;
-
-    let ancestorIds = [];
-    if (familyTreeId) {
-      const { data: tree } = await supabase
-        .from("family_tree")
-        .select("ancestor")
-        .eq("id", familyTreeId)
-        .maybeSingle();
-      if (tree && tree.ancestor && tree.ancestor !== id) {
-        ancestorIds.push(tree.ancestor);
-      }
-    }
-
-    const parentIds = (parentRels || []).map((r) => r.parent_id);
-    // Ensure ancestorIds are not included in parentIds
-    const filteredParentIds = parentIds.filter(
-      (pid) => !ancestorIds.includes(pid)
-    );
-
-    let siblingIds = [];
-    if (filteredParentIds.length > 0) {
-      const { data: siblingRels } = await supabase
+    const getChildrenIds = async (parentIds) => {
+      if (!parentIds || parentIds.length === 0) return [];
+      const { data } = await supabase
         .from("relationships")
         .select("child_id")
-        .in("parent_id", filteredParentIds)
-        .neq("child_id", id);
+        .in("parent_id", parentIds);
+      return [...new Set((data || []).map((r) => r.child_id))];
+    };
 
-      // Unique set of sibling IDs
-      siblingIds = [...new Set((siblingRels || []).map((r) => r.child_id))];
+    // --- Diagram Logic ---
+
+    // Step 1: Get immediate parents of the person (H)
+    const hParentIds = await getParentsIds([id]);
+
+    // Step 2: Get ALL children of these parents (H + Siblings)
+    // If no parents found, the "current generation" is just H.
+    let currentGenIds = [id];
+    if (hParentIds.length > 0) {
+      const allChildren = await getChildrenIds(hParentIds);
+      // Add unique children (just in case)
+      const combined = new Set([...allChildren, id]);
+      currentGenIds = Array.from(combined);
     }
 
-    // 4. Fetch details for all related people (parents + siblings)
-    const relatedIds = [
-      ...new Set([...ancestorIds, ...filteredParentIds, ...siblingIds]),
-    ];
-    const relatedMap = {};
+    // Step 3: Recursive Ancestry Loop (Parents, Grandparents...)
+    let generations = [];
+    let currentChildBatch = [id];
+    let loopSafety = 0;
+    const MAX_GENERATIONS = 10;
 
-    if (relatedIds.length > 0) {
+    while (loopSafety < MAX_GENERATIONS) {
+      const parentIds = await getParentsIds(currentChildBatch);
+      if (parentIds.length === 0) break;
+
+      const grandParentIds = await getParentsIds(parentIds);
+      let parentSiblingIds = [];
+      if (grandParentIds.length > 0) {
+        const auntsUncles = await getChildrenIds(grandParentIds);
+        parentSiblingIds = auntsUncles.filter(
+          (uid) => !parentIds.includes(uid)
+        );
+      }
+
+      generations.push({
+        level: loopSafety + 1,
+        parentIds: parentIds,
+        siblingIds: parentSiblingIds,
+      });
+
+      currentChildBatch = parentIds;
+      loopSafety++;
+    }
+
+    // --- Fetch Details ---
+
+    // Collect all IDs
+    const allRelatedIds = new Set([...currentGenIds]);
+    generations.forEach((gen) => {
+      gen.parentIds.forEach((pid) => allRelatedIds.add(pid));
+      gen.siblingIds.forEach((sid) => allRelatedIds.add(sid));
+    });
+
+    const allIdsArray = Array.from(allRelatedIds);
+    const relatedPeopleMap = {};
+
+    if (allIdsArray.length > 0) {
       const { data: relatives } = await supabase
         .from("people")
-        .select("id, first_name, middle_name, last_name")
-        .in("id", relatedIds);
+        .select("id, first_name, middle_name, last_name, birth_date") // Added birth_date for sorting
+        .in("id", allIdsArray);
 
       (relatives || []).forEach((p) => {
-        relatedMap[p.id] = formatPersonName(p);
+        relatedPeopleMap[p.id] = formatPersonName(p);
       });
     }
 
-    // 5. Prepare response arrays
-    const ancestors = ancestorIds.map((aid) => relatedMap[aid]).filter(Boolean);
-    const parents = filteredParentIds
-      .map((pid) => relatedMap[pid])
-      .filter(Boolean);
-    const siblings = siblingIds.map((sid) => relatedMap[sid]).filter(Boolean);
+    // --- Construct Response ---
 
-    // 6. Render Story HTML
+    // Sort function: Birth date (asc), then ID (asc) as fallback
+    const sortByDate = (a, b) => {
+      const dateA = a.birth_date || "9999-12-31";
+      const dateB = b.birth_date || "9999-12-31";
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      return a.id - b.id;
+    };
+
+    // Current Generation (H + Siblings) Sorted
+    const current_generation = currentGenIds
+      .map((gid) => relatedPeopleMap[gid])
+      .filter(Boolean)
+      .sort(sortByDate);
+
+    // Ancestral Generations Sorted
+    const ancestral_generations = generations.map((gen) => {
+      const parents = gen.parentIds
+        .map((pid) => relatedPeopleMap[pid])
+        .filter(Boolean)
+        .sort(sortByDate);
+      const siblings = gen.siblingIds
+        .map((sid) => relatedPeopleMap[sid])
+        .filter(Boolean)
+        .sort(sortByDate);
+      return {
+        level: gen.level,
+        parents,
+        siblings,
+      };
+    });
+
+    // Render Story
     let storyHTML = "";
     if (person.story) {
       storyHTML = (await renderStoryToHTML(person.story)) || "";
     }
 
-    // 7. Return combined data
     res.json({
       ...formatPersonName(person),
       storyHTML,
-      ancestors,
-      parents,
-      siblings,
+      current_generation, // The sorted list including self and siblings
+      ancestral_generations,
     });
   } catch (error) {
     console.error("Error fetching person details:", error);
@@ -247,18 +289,22 @@ exports.getPersonDetails = async (req, res) => {
 };
 
 async function renderStoryToHTML(story) {
-  // get all unique IDs mentioned in the story
   const ids = Array.from(
     new Set(
       Array.from(story.matchAll(/\[person:(\d+)\]/g)).map((m) => Number(m[1]))
     )
   );
+  if (ids.length === 0) return story;
 
-  // fetch only those people
   const { data, error } = await supabase
     .from("people")
     .select("id, first_name, middle_name, last_name")
     .in("id", ids);
+
+  if (error) {
+    console.error("Error parsing story names", error);
+    return story;
+  }
 
   const nameMap = {};
   (data || []).forEach((p) => {
@@ -271,7 +317,8 @@ async function renderStoryToHTML(story) {
       : "";
 
   return story.replace(/\[person:(\d+)\]/g, (match, id) => {
-    const name = nameMap[id]["name"] ?? `Unknown (${id})`;
+    const info = nameMap[id];
+    const name = info ? info.name : `Unknown (${id})`;
     return `<a href="/pages/person.html?id=${id}">${safe(name)}</a>`;
   });
 }
