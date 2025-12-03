@@ -158,6 +158,7 @@ exports.savePersonStory = async (req, res) => {
   return res.json(data);
 };
 
+// Modified getPersonDetails based on the diagram logic
 exports.getPersonDetails = async (req, res) => {
   const id = Number(req.params.id);
 
@@ -171,15 +172,20 @@ exports.getPersonDetails = async (req, res) => {
 
     if (error) throw error;
 
-    // 2. Fetch Parents (find relationships where this person is the child)
-    const { data: parentRels } = await supabase
-      .from("relationships")
-      .select("parent_id, family_tree_id")
-      .eq("child_id", id);
+    // --- Helper Methods for Recursion ---
 
-    const familyTreeId =
-      parentRels.length > 0 ? parentRels[0].family_tree_id : null;
+    // Helper: Fetch parents for a list of child IDs
+    const getParentsIds = async (childIds) => {
+      if (!childIds || childIds.length === 0) return [];
+      const { data } = await supabase
+        .from("relationships")
+        .select("parent_id")
+        .in("child_id", childIds);
+      // Return unique parent IDs
+      return [...new Set((data || []).map((r) => r.parent_id))];
+    };
 
+<<<<<<< Updated upstream
     let ancestorIds = [];
     if (familyTreeId) {
       console.log(`Person ID ${id} belongs to Family Tree ID ${familyTreeId}`);
@@ -202,52 +208,140 @@ exports.getPersonDetails = async (req, res) => {
     let siblingIds = [];
     if (filteredParentIds.length > 0) {
       const { data: siblingRels } = await supabase
+=======
+    // Helper: Fetch children for a list of parent IDs
+    const getChildrenIds = async (parentIds) => {
+      if (!parentIds || parentIds.length === 0) return [];
+      const { data } = await supabase
+>>>>>>> Stashed changes
         .from("relationships")
         .select("child_id")
-        .in("parent_id", filteredParentIds)
-        .neq("child_id", id);
+        .in("parent_id", parentIds);
+      return [...new Set((data || []).map((r) => r.child_id))];
+    };
 
-      // Unique set of sibling IDs
-      siblingIds = [...new Set((siblingRels || []).map((r) => r.child_id))];
+    // --- Logic to Implement the Diagram ---
+
+    // Step 1: Get immediate parents of the person (H)
+    const hParentIds = await getParentsIds([id]);
+
+    // Step 2: Get siblings of the person (H)
+    // (Children of H's parents excluding H)
+    let hSiblingIds = [];
+    if (hParentIds.length > 0) {
+      const allChildren = await getChildrenIds(hParentIds);
+      hSiblingIds = allChildren.filter((sid) => sid !== id);
     }
 
-    // 4. Fetch details for all related people (parents + siblings)
-    const relatedIds = [
-      ...new Set([...ancestorIds, ...filteredParentIds, ...siblingIds]),
-    ];
-    const relatedMap = {};
+    // Step 3: Recursive Ancestry Loop
+    // Structure: We want a list of generations.
+    // Generation 1: H's parents + H's parents' siblings
+    // Generation 2: H's grandparents + H's grandparents' siblings
+    let generations = [];
+    let currentChildBatch = [id];
+    let loopSafety = 0;
+    const MAX_GENERATIONS = 10;
 
-    if (relatedIds.length > 0) {
+    while (loopSafety < MAX_GENERATIONS) {
+      // Find parents of the current batch
+      const parentIds = await getParentsIds(currentChildBatch);
+      if (parentIds.length === 0) break; // Stop if no parents found
+
+      // Find siblings of these parents
+      // To find a parent's siblings, we need the parent's parents (grandparents of current batch)
+      const grandParentIds = await getParentsIds(parentIds);
+
+      let parentSiblingIds = [];
+      if (grandParentIds.length > 0) {
+        const auntsUncles = await getChildrenIds(grandParentIds);
+        // Siblings are children of grandparents, excluding the direct parents
+        parentSiblingIds = auntsUncles.filter(
+          (uid) => !parentIds.includes(uid)
+        );
+      }
+
+      generations.push({
+        level: loopSafety + 1,
+        parentIds: parentIds,
+        siblingIds: parentSiblingIds,
+      });
+
+      // Move up the tree: parents become the children for the next iteration
+      currentChildBatch = parentIds;
+      loopSafety++;
+    }
+
+    // --- Fetch Details for All Collected IDs ---
+
+    // Collect all unique IDs to fetch
+    const allRelatedIds = new Set([...hSiblingIds]);
+    generations.forEach((gen) => {
+      gen.parentIds.forEach((pid) => allRelatedIds.add(pid));
+      gen.siblingIds.forEach((sid) => allRelatedIds.add(sid));
+    });
+
+    const allIdsArray = Array.from(allRelatedIds);
+    const relatedPeopleMap = {};
+
+    if (allIdsArray.length > 0) {
       const { data: relatives } = await supabase
         .from("people")
         .select("id, first_name, middle_name, last_name")
-        .in("id", relatedIds);
+        .in("id", allIdsArray);
 
       (relatives || []).forEach((p) => {
-        relatedMap[p.id] = formatPersonName(p);
+        relatedPeopleMap[p.id] = formatPersonName(p);
       });
     }
 
-    // 5. Prepare response arrays
-    const ancestors = ancestorIds.map((aid) => relatedMap[aid]).filter(Boolean);
-    const parents = filteredParentIds
-      .map((pid) => relatedMap[pid])
-      .filter(Boolean);
-    const siblings = siblingIds.map((sid) => relatedMap[sid]).filter(Boolean);
+    // --- Construct Response ---
 
-    // 6. Render Story HTML
+    // H's siblings
+    const siblings = hSiblingIds
+      .map((sid) => relatedPeopleMap[sid])
+      .filter(Boolean);
+
+    // H's direct parents (from Generation 1)
+    const parents =
+      generations.length > 0
+        ? generations[0].parentIds
+            .map((pid) => relatedPeopleMap[pid])
+            .filter(Boolean)
+        : [];
+
+    // Full lineage with siblings at each level
+    const ancestral_generations = generations.map((gen) => ({
+      level: gen.level,
+      parents: gen.parentIds
+        .map((pid) => relatedPeopleMap[pid])
+        .filter(Boolean),
+      siblings: gen.siblingIds
+        .map((sid) => relatedPeopleMap[sid])
+        .filter(Boolean),
+    }));
+
+    // Flattened list of ancestors for backward compatibility or easy access
+    const ancestors = [];
+    generations.forEach((gen) => {
+      gen.parentIds.forEach((pid) => {
+        if (relatedPeopleMap[pid]) ancestors.push(relatedPeopleMap[pid]);
+      });
+    });
+
+    // Render Story HTML
     let storyHTML = "";
     if (person.story) {
       storyHTML = (await renderStoryToHTML(person.story)) || "";
     }
 
-    // 7. Return combined data
+    // Return combined data
     res.json({
       ...formatPersonName(person),
       storyHTML,
-      ancestors,
-      parents,
       siblings,
+      parents,
+      ancestors,
+      ancestral_generations, // This contains the structured diagram data: [{ parents: [E], siblings: [F,G] }, ...]
     });
   } catch (error) {
     console.error("Error fetching person details:", error);
@@ -263,13 +357,22 @@ async function renderStoryToHTML(story) {
     )
   );
 
+<<<<<<< Updated upstream
   console.log("rednering story, found person IDs:", ids);
+=======
+  if (ids.length === 0) return story;
+>>>>>>> Stashed changes
 
   // fetch only those people
   const { data, error } = await supabase
     .from("people")
     .select("id, first_name, middle_name, last_name")
     .in("id", ids);
+
+  if (error) {
+    console.error("Error parsing story names", error);
+    return story;
+  }
 
   const nameMap = {};
   (data || []).forEach((p) => {
@@ -284,7 +387,8 @@ async function renderStoryToHTML(story) {
       : "";
 
   return story.replace(/\[person:(\d+)\]/g, (match, id) => {
-    const name = nameMap[id]["name"] ?? `Unknown (${id})`;
+    const info = nameMap[id];
+    const name = info ? info.name : `Unknown (${id})`;
     return `<a href="/pages/person.html?id=${id}">${safe(name)}</a>`;
   });
 }
