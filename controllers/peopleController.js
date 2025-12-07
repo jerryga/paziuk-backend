@@ -20,7 +20,7 @@ exports.getAllPeople = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("people")
-      .select("id, first_name, middle_name, last_name, role, story, extra_info")
+      .select("id, first_name, middle_name, last_name, role, story, birth_date")
       .order("first_name", { ascending: true });
 
     if (error) throw error;

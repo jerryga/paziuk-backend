@@ -14,6 +14,7 @@ function formatPersonName(person) {
     first_name: person.first_name,
     middle_name: person.middle_name,
     last_name: person.last_name,
+    birth_date: person.birth_date || null,
   };
 }
 
