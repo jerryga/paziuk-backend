@@ -18,6 +18,12 @@ router.get("/:id", peopleController.getPersonById);
 // Create a new person
 router.post("/", peopleController.createPerson);
 
+// Add a sibling for an existing person
+router.post("/:id/siblings", peopleController.addSibling);
+
+// Add a child for an existing person
+router.post("/:id/children", peopleController.addChild);
+
 // Update a person
 router.put("/:id", peopleController.updatePerson);
 
@@ -26,6 +32,6 @@ router.delete("/:id", peopleController.deletePerson);
 
 router.get("/details/:id", peopleController.getPersonDetails);
 
-router.put("/:id/story", peopleController.savePersonStory);
+router.put("/save/:id", peopleController.savePerson);
 
 module.exports = router;
