@@ -290,9 +290,14 @@ exports.searchPeople = async (req, res) => {
 };
 
 exports.savePerson = async (req, res) => {
-  const { id, story, birth_date, first_name, middle_name, last_name } =
-    req.body;
-  if (isNaN(id)) return res.status(400).json({ error: "Invalid person ID" });
+  const id = req.params.id;
+
+  // Remove 'id' from the destructuring of req.body
+  const { story, birth_date, first_name, middle_name, last_name } = req.body;
+
+  // CHANGE 2: Ensure we validate the ID from params
+  if (isNaN(Number(id)))
+    return res.status(400).json({ error: "Invalid person ID" });
   const updateData = { story };
   if (birth_date) {
     updateData.birth_date = birth_date;
@@ -300,13 +305,19 @@ exports.savePerson = async (req, res) => {
   updateData.first_name = first_name;
   updateData.middle_name = middle_name;
   updateData.last_name = last_name;
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("people")
     .update(updateData)
+    .eq("id", id);
+
+  console.log("Save story update result:", error, id);
+
+  const { data } = await supabase
+    .from("people")
+    .select("*")
     .eq("id", id)
-    .select()
     .maybeSingle();
-  console.log("Save story update result:", data, error);
+
   if (data == null)
     return res.status(404).json({ error: "Person not found! Try again." });
   if (error) return res.status(400).json({ error: error.message });

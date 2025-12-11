@@ -1,6 +1,8 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config();
+const supabase = require("./supabaseClient");
 
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
@@ -26,6 +28,12 @@ app.get("/", (req, res) => res.send("Server is running"));
 
 // Start server
 const port = process.env.PORT || 8080;
-app.listen(port, () => {
-  console.log(`Family Tree app listening on port ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`Family Tree app listening on port ${port}`);
+// });
+
+(async () => {
+  await supabase.from("people").select("id").limit(1);
+  console.log("Supabase warmed");
+  app.listen(port, () => console.log("Family Tree app listening"));
+})();
