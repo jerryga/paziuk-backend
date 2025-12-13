@@ -9,6 +9,7 @@ const userRoutes = require("./routes/userRoutes");
 const relationshipRoutes = require("./routes/relationshipRoutes");
 const peopleRoutes = require("./routes/peopleRoutes");
 const contactRoutes = require("./routes/contactRoutes");
+const messageRoutes = require("./routes/messagesRoutes");
 
 const app = express();
 
@@ -22,7 +23,7 @@ app.use("/users", userRoutes);
 app.use("/relationships", relationshipRoutes);
 app.use("/people", peopleRoutes);
 app.use("/contact", contactRoutes);
-
+app.use("/messages", messageRoutes);
 // Health check
 app.get("/", (req, res) => res.send("Server is running"));
 
