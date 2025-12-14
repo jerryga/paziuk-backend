@@ -1,7 +1,7 @@
 const supabase = require("../supabaseClient");
 
 exports.createMessage = async (req, res) => {
-  const { personId, extra_info } = req.body;
+  const { personId, name, extra_info } = req.body;
   try {
     if (!personId) {
       return res.status(400).json({ error: "personId is required" });
@@ -13,6 +13,7 @@ exports.createMessage = async (req, res) => {
       .select("id")
       .eq("person_id", personId)
       .limit(1);
+    console.log(existingMessages, fetchError);
     if (fetchError) throw fetchError;
     if (existingMessages && existingMessages.length > 0) {
       return res
@@ -22,8 +23,11 @@ exports.createMessage = async (req, res) => {
 
     const { data, error } = await supabase
       .from("messages")
-      .insert([{ person_id: personId, extra_info }])
+      .insert([{ person_id: personId, person_name: name, extra_info }])
+      .select("*")
       .single();
+
+    console.log(data, error);
     if (error) throw error;
     res.status(201).json(data);
   } catch (error) {
@@ -33,7 +37,10 @@ exports.createMessage = async (req, res) => {
 
 exports.getMessages = async (req, res) => {
   try {
-    const { data, error } = await supabase.from("messages").select("*");
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .order("created_at", { ascending: false });
     if (error) throw error;
     res.json(data);
   } catch (error) {
@@ -62,8 +69,11 @@ exports.getMessageByPersonId = async (req, res) => {
       .from("messages")
       .select("*")
       .eq("person_id", personId)
-      .single();
+      .maybeSingle();
     if (error) throw error;
+    if (!data) {
+      return res.status(404).json({ error: "Message not found" });
+    }
     res.json(data);
   } catch (error) {
     res.status(400).json({ error: error.message });

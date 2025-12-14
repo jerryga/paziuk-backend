@@ -486,6 +486,7 @@ exports.getPersonDetails = async (req, res) => {
       birth_date: person.birth_date,
       name: formatPersonName(person).name,
       role: person.role,
+      story: person.story || "",
       storyHTML,
       current_generation, // The sorted list including self and siblings
       ancestral_generations,
