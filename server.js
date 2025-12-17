@@ -13,8 +13,26 @@ const messageRoutes = require("./routes/messagesRoutes");
 
 const app = express();
 
+const allowedOrigins = [
+  "https://paziuk.chasonjia-dev.workers.dev",
+  /^https?:\/\/localhost(?::\d+)?$/,
+  /^https?:\/\/127\.0\.0\.1(?::\d+)?$/,
+];
+
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const isAllowed = allowedOrigins.some((allowed) =>
+        typeof allowed === "string" ? allowed === origin : allowed.test(origin)
+      );
+      return isAllowed
+        ? callback(null, true)
+        : callback(new Error("Not allowed by CORS"));
+    },
+  })
+);
 app.use(express.json());
 
 // Routes

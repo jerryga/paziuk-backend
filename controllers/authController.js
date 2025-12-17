@@ -1,4 +1,5 @@
 const supabase = require("../supabaseClient");
+const SESSION_DURATION = 14400000; // 4 hours
 
 exports.signup = async (req, res) => {
   const {
@@ -212,7 +213,7 @@ exports.login = async (req, res) => {
       session: {
         access_token: authData.session.access_token,
         refresh_token: authData.session.refresh_token,
-        expires_at: Date.now() + 3600000 * 4, // 4 hours from now
+        expires_at: Date.now() + SESSION_DURATION, // 4 hours from now
       },
       user: {
         id: userData.id,
