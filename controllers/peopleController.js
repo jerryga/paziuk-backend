@@ -14,6 +14,26 @@ function formatPersonName(person) {
   };
 }
 
+function normalizeBirthDateForDb(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+
+  if (/^\d{4}$/.test(trimmed)) {
+    return `${trimmed}-01-01`;
+  }
+
+  if (/^\d{4}-\d{2}$/.test(trimmed)) {
+    return `${trimmed}-01`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
 // ... [Existing methods: getAllPeople, getPersonById, createPerson, updatePerson, deletePerson, searchPeople, savePersonStory] ...
 
 exports.getAllPeople = async (req, res) => {
@@ -50,7 +70,10 @@ exports.getPersonById = async (req, res) => {
 
 exports.createPerson = async (req, res) => {
   try {
-    const personData = req.body;
+    const personData = { ...(req.body || {}) };
+    if (personData.birth_date !== undefined) {
+      personData.birth_date = normalizeBirthDateForDb(personData.birth_date);
+    }
     const { data, error } = await supabase
       .from("people")
       .insert([personData])
@@ -107,7 +130,7 @@ exports.addSibling = async (req, res) => {
       first_name: first_name || null,
       middle_name: middle_name || null,
       last_name: last_name || null,
-      birth_date: birth_date || null,
+      birth_date: normalizeBirthDateForDb(birth_date),
       story: story || null,
     };
 
@@ -187,7 +210,7 @@ exports.addChild = async (req, res) => {
       first_name: first_name || null,
       middle_name: middle_name || null,
       last_name: last_name || null,
-      birth_date: birth_date || null,
+      birth_date: normalizeBirthDateForDb(birth_date),
       story: story || null,
     };
 
@@ -229,7 +252,10 @@ exports.addChild = async (req, res) => {
 exports.updatePerson = async (req, res) => {
   try {
     const { id } = req.params;
-    const personData = req.body;
+    const personData = { ...(req.body || {}) };
+    if (personData.birth_date !== undefined) {
+      personData.birth_date = normalizeBirthDateForDb(personData.birth_date);
+    }
     const { data, error } = await supabase
       .from("people")
       .update(personData)
@@ -307,7 +333,9 @@ exports.savePerson = async (req, res) => {
     };
 
     assignIfProvided("story", story);
-    assignIfProvided("birth_date", birth_date);
+    if (birth_date !== undefined) {
+      assignIfProvided("birth_date", normalizeBirthDateForDb(birth_date));
+    }
     assignIfProvided("first_name", first_name);
     assignIfProvided("middle_name", middle_name);
     assignIfProvided("last_name", last_name);

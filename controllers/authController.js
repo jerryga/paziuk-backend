@@ -1,6 +1,26 @@
 const supabase = require("../supabaseClient");
 const SESSION_DURATION = 14400000; // 4 hours
 
+function normalizeBirthDateForDb(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+
+  if (/^\d{4}$/.test(trimmed)) {
+    return `${trimmed}-01-01`;
+  }
+
+  if (/^\d{4}-\d{2}$/.test(trimmed)) {
+    return `${trimmed}-01`;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
 exports.signup = async (req, res) => {
   const {
     email,
@@ -12,6 +32,8 @@ exports.signup = async (req, res) => {
     birth_place,
   } = req.body;
 
+  const normalizedBirthDate = normalizeBirthDateForDb(birth_date);
+
   try {
     // 0. Find existing person row
     let query = supabase
@@ -20,7 +42,7 @@ exports.signup = async (req, res) => {
         "id, first_name, middle_name, last_name, birth_date, birth_place, role"
       )
       .ilike("first_name", first_name)
-      .eq("birth_date", birth_date);
+      .eq("birth_date", normalizedBirthDate);
 
     if (
       middle_name !== null &&
@@ -208,12 +230,16 @@ exports.login = async (req, res) => {
     console.log("=== Login Successful ===", userData);
 
     // 3. Return session with custom expiration timestamp
+    const expiresAt = authData.session?.expires_at
+      ? authData.session.expires_at * 1000
+      : Date.now() + SESSION_DURATION;
+
     res.json({
       message: "Login successful",
       session: {
         access_token: authData.session.access_token,
         refresh_token: authData.session.refresh_token,
-        expires_at: Date.now() + SESSION_DURATION, // 4 hours from now
+        expires_at: expiresAt,
       },
       user: {
         id: userData.id,
@@ -228,5 +254,38 @@ exports.login = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+exports.refresh = async (req, res) => {
+  const { refresh_token } = req.body || {};
+
+  if (!refresh_token) {
+    return res.status(400).json({ error: "Missing refresh token" });
+  }
+
+  try {
+    const { data: authData, error: authError } =
+      await supabase.auth.refreshSession({ refresh_token });
+
+    if (authError || !authData?.session) {
+      return res
+        .status(401)
+        .json({ error: authError?.message || "Refresh failed" });
+    }
+
+    const expiresAt = authData.session?.expires_at
+      ? authData.session.expires_at * 1000
+      : Date.now() + SESSION_DURATION;
+
+    return res.json({
+      session: {
+        access_token: authData.session.access_token,
+        refresh_token: authData.session.refresh_token,
+        expires_at: expiresAt,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 };
