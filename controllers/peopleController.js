@@ -177,6 +177,25 @@ exports.addChild = async (req, res) => {
     return res.status(400).json({ error: "Invalid person ID" });
   }
 
+  const { data, error } = await supabase
+    .from("relationships")
+    .select("family_tree_id")
+    .or(`parent_id.eq.${parentId},child_id.eq.${parentId}`)
+    .not("family_tree_id", "is", null)
+    .order("id", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  const familyTreeId = data[0]?.family_tree_id ?? null;
+
+  if (!familyTreeId) {
+    return res.status(400).json({
+      error:
+        "Cannot add a child because the selected person is not part of any family tree." +
+        parentId,
+    });
+  }
+
   const {
     first_name,
     middle_name,
@@ -185,7 +204,6 @@ exports.addChild = async (req, res) => {
     story,
     relation_type,
     notes,
-    family_tree_id,
   } = req.body || {};
 
   if (!first_name && !last_name) {
@@ -227,7 +245,7 @@ exports.addChild = async (req, res) => {
       child_id: newChild.id,
       relation_type: relation_type || null,
       notes: notes || null,
-      family_tree_id: family_tree_id || null,
+      family_tree_id: familyTreeId,
     };
 
     const { error: relInsertError } = await supabase
@@ -303,7 +321,7 @@ exports.searchPeople = async (req, res) => {
       .from("people")
       .select("*")
       .or(
-        `first_name.ilike.%${q}%,middle_name.ilike.%${q}%,last_name.ilike.%${q}%`
+        `first_name.ilike.%${q}%,middle_name.ilike.%${q}%,last_name.ilike.%${q}%`,
       )
       .order("first_name", { ascending: true });
 
@@ -429,7 +447,7 @@ exports.getPersonDetails = async (req, res) => {
         if (grandParentIds.length > 0) {
           const auntsUncles = await getChildrenIds(grandParentIds);
           parentSiblingIds = auntsUncles.filter(
-            (uid) => !parentIds.includes(uid)
+            (uid) => !parentIds.includes(uid),
           );
         }
 
@@ -528,8 +546,8 @@ exports.getPersonDetails = async (req, res) => {
 async function renderStoryToHTML(story) {
   const ids = Array.from(
     new Set(
-      Array.from(story.matchAll(/\[person:(\d+)\]/g)).map((m) => Number(m[1]))
-    )
+      Array.from(story.matchAll(/\[person:(\d+)\]/g)).map((m) => Number(m[1])),
+    ),
   );
   if (ids.length === 0) return story;
 
