@@ -39,7 +39,7 @@ exports.signup = async (req, res) => {
     let query = supabase
       .from("people")
       .select(
-        "id, first_name, middle_name, last_name, birth_date, birth_place, role"
+        "id, first_name, middle_name, last_name, birth_date, birth_place, role",
       )
       .ilike("first_name", first_name)
       .eq("birth_date", normalizedBirthDate);
@@ -169,7 +169,7 @@ exports.login = async (req, res) => {
       ) {
         const expiry = new Date(userCheck.lockout_until);
         const timeLeftHours = Math.ceil(
-          (expiry - new Date()) / (1000 * 60 * 60)
+          (expiry - new Date()) / (1000 * 60 * 60),
         );
         return res.status(403).json({
           error: `Account locked due to multiple failed login attempts. Please try again in approximately ${timeLeftHours} hours.`,
@@ -220,7 +220,7 @@ exports.login = async (req, res) => {
     const { data: userData, error: userError } = await supabase
       .from("users")
       .select(
-        "id, email, role, person_id, first_name, middle_name, last_name, birth_date"
+        "id, email, role, person_id, first_name, middle_name, last_name, birth_date",
       )
       .eq("id", authData.user.id)
       .single();
@@ -286,6 +286,52 @@ exports.refresh = async (req, res) => {
       },
     });
   } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+// Request a password reset email via Supabase
+exports.resetPassword = async (req, res) => {
+  const { email, redirectTo } = req.body || {};
+
+  if (!email) return res.status(400).json({ error: "Missing email" });
+
+  try {
+    const redirect =
+      redirectTo || process.env.FRONTEND_URL || "http://localhost:3000";
+
+    // Support multiple versions of the Supabase client API
+    let result;
+    if (
+      supabase.auth &&
+      typeof supabase.auth.resetPasswordForEmail === "function"
+    ) {
+      result = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${redirect}/pages/reset-password-confirm.html`,
+      });
+    } else if (
+      supabase.auth &&
+      supabase.auth.api &&
+      typeof supabase.auth.api.resetPasswordForEmail === "function"
+    ) {
+      result = await supabase.auth.api.resetPasswordForEmail(email, {
+        redirectTo: `${redirect}/pages/reset-password-confirm.html`,
+      });
+    } else {
+      return res
+        .status(500)
+        .json({ error: "Unsupported Supabase client for password reset" });
+    }
+
+    if (result?.error) {
+      return res
+        .status(400)
+        .json({ error: result.error.message || result.error });
+    }
+
+    return res.json({ message: "Password reset email sent" });
+  } catch (err) {
+    console.error("resetPassword error:", err);
     return res.status(500).json({ error: err.message });
   }
 };
