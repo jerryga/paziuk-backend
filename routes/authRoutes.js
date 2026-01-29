@@ -1,3 +1,6 @@
+const validate = require("../middleware/validate");
+const { signupSchema, loginSchema } = require("../validations/authSchema");
+
 const express = require("express");
 const router = express.Router();
 const {
@@ -9,7 +12,6 @@ const {
 
 const rateLimit = require("express-rate-limit");
 
-// Define the rate limiter for password resets
 const resetPasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 3, // Limit each IP to 3 requests per `window`
@@ -21,8 +23,16 @@ const resetPasswordLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-router.post("/signup", signup);
-router.post("/login", login);
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 login attempts per window
+  message: { error: "Too many login attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post("/signup", validate(signupSchema), signup);
+router.post("/login", loginLimiter, validate(loginSchema), login);
 router.post("/refresh", refresh);
 router.post("/reset-password", resetPasswordLimiter, resetPassword);
 

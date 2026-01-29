@@ -1,6 +1,8 @@
 require("dotenv").config();
 
 const express = require("express");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const cors = require("cors");
 const supabase = require("./supabaseClient");
 
@@ -13,6 +15,19 @@ const messageRoutes = require("./routes/messagesRoutes");
 
 const app = express();
 
+// Trust proxy when deployed behind a proxy (CDN/load balancer)
+app.set("trust proxy", 1);
+
+// Global rate limiter to protect against abuse
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // limit each IP to 200 requests per windowMs
+  message: { error: "Too many requests, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
 const allowedOrigins = [
   "https://paziuk.chasonjia-dev.workers.dev",
   /^https?:\/\/localhost(?::\d+)?$/,
@@ -21,19 +36,32 @@ const allowedOrigins = [
 
 // Middleware
 app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        "default-src": ["'self'"],
+        "connect-src": ["'self'", "https://*.supabase.co"], // Allow connections to Supabase
+        "script-src": ["'self'", "'unsafe-inline'"],
+        "object-src": ["'none'"],
+      },
+    },
+  }),
+);
+
+app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       const isAllowed = allowedOrigins.some((allowed) =>
-        typeof allowed === "string" ? allowed === origin : allowed.test(origin)
+        typeof allowed === "string" ? allowed === origin : allowed.test(origin),
       );
       return isAllowed
         ? callback(null, true)
         : callback(new Error("Not allowed by CORS"));
     },
-  })
+  }),
 );
-app.use(express.json());
+app.use(express.json({ limit: "200kb" }));
 
 // Routes
 app.use("/auth", authRoutes);
