@@ -34,8 +34,7 @@ const loginSchema = Joi.object({
     .messages({
       "string.min": "Password must be at least 8 characters long.",
       "string.max": "Password must be at most 20 characters long.",
-      "string.pattern.base":
-        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character:!@#$%^&*+.",
+      "string.pattern.base": "Invalid account or password.",
       "any.required": "Password is required.",
     }),
 });
