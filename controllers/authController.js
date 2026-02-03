@@ -298,7 +298,9 @@ exports.resetPassword = async (req, res) => {
 
   try {
     const redirect =
-      redirectTo || process.env.FRONTEND_URL || "http://localhost:3000";
+      redirectTo ||
+      process.env.FRONTEND_URL ||
+      "https://paziuk.chasonjia-dev.workers.dev";
 
     // Support multiple versions of the Supabase client API
     let result;
