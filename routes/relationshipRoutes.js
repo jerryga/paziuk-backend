@@ -4,7 +4,9 @@ const relationshipController = require("../controllers/relationshipController");
 const authMiddleware = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 
-// All routes require authentication
+// Note: GET routes are public to allow viewing family trees without authentication
+// Mutation routes (PUT, DELETE) are protected with requireRole("admin")
+// If you need to restrict viewing to authenticated users only, uncomment the line below:
 // router.use(authMiddleware);
 
 router.get("/", relationshipController.getAllFamilyTrees);
