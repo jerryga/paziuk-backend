@@ -167,7 +167,7 @@ exports.addSibling = async (req, res) => {
     });
   } catch (error) {
     console.error("Error adding sibling:", error);
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ error: "Failed to add sibling" });
   }
 };
 
@@ -175,25 +175,6 @@ exports.addChild = async (req, res) => {
   const parentId = Number(req.params.id);
   if (Number.isNaN(parentId)) {
     return res.status(400).json({ error: "Invalid person ID" });
-  }
-
-  const { data, error } = await supabase
-    .from("relationships")
-    .select("family_tree_id")
-    .or(`parent_id.eq.${parentId},child_id.eq.${parentId}`)
-    .not("family_tree_id", "is", null)
-    .order("id", { ascending: false })
-    .limit(1);
-
-  if (error) throw error;
-  const familyTreeId = data[0]?.family_tree_id ?? null;
-
-  if (!familyTreeId) {
-    return res.status(400).json({
-      error:
-        "Cannot add a child because the selected person is not part of any family tree." +
-        parentId,
-    });
   }
 
   const {
@@ -222,6 +203,24 @@ exports.addChild = async (req, res) => {
     if (parentError) throw parentError;
     if (!parentExists) {
       return res.status(404).json({ error: "Parent not found" });
+    }
+
+    const { data: familyTreeRows, error: familyTreeError } = await supabase
+      .from("relationships")
+      .select("family_tree_id")
+      .or(`parent_id.eq.${parentId},child_id.eq.${parentId}`)
+      .not("family_tree_id", "is", null)
+      .order("id", { ascending: false })
+      .limit(1);
+
+    if (familyTreeError) throw familyTreeError;
+    const familyTreeId = familyTreeRows[0]?.family_tree_id ?? null;
+
+    if (!familyTreeId) {
+      return res.status(400).json({
+        error:
+          "Cannot add a child because the selected person is not part of any family tree.",
+      });
     }
 
     const childPayload = {
@@ -263,7 +262,7 @@ exports.addChild = async (req, res) => {
     });
   } catch (error) {
     console.error("Error adding child:", error);
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ error: "Failed to add child" });
   }
 };
 
@@ -294,20 +293,31 @@ exports.deletePerson = async (req, res) => {
     if (Number.isNaN(personId)) {
       return res.status(400).json({ error: "Invalid person ID" });
     }
+
+    const { data: existingPerson, error: personLookupError } = await supabase
+      .from("people")
+      .select("id")
+      .eq("id", personId)
+      .maybeSingle();
+
+    if (personLookupError) throw personLookupError;
+    if (!existingPerson) {
+      return res.status(404).json({ error: "Person not found" });
+    }
+
     // Remove relationships referencing this person before deleting the record
     const { error: relError } = await supabase
       .from("relationships")
       .delete()
       .or(`parent_id.eq.${personId},child_id.eq.${personId}`);
 
-    if (relError) throw relError;
-
     const { error } = await supabase.from("people").delete().eq("id", personId);
-
+    console.log("Delete person result:", error, personId);
     if (error) throw error;
     res.json({ message: "Person deleted successfully" });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error("Error deleting person:", error);
+    res.status(500).json({ error: "Failed to delete person" });
   }
 };
 
