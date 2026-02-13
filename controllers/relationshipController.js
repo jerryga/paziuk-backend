@@ -47,9 +47,8 @@ function formatRelationships(relationships) {
 /**
  * Get all family trees from the database
  * @route GET /relationships
- * @returns {Object[]} Array of family tree objects
- * @returns {number} 200 - Success with family trees data
- * @returns {number} 500 - Internal server error
+ * @returns {Object[]} Array of family tree objects with id, name, and other properties
+ * @throws {Error} 500 - Internal server error if database query fails
  */
 exports.getAllFamilyTrees = async (req, res) => {
   try {
@@ -62,7 +61,7 @@ exports.getAllFamilyTrees = async (req, res) => {
 
     res.json(data);
   } catch (error) {
-    console.error("Error fetching family trees:", error);
+    console.error("Error fetching family trees:", error.message);
     res.status(500).json({ error: "Failed to fetch family trees" });
   }
 };
