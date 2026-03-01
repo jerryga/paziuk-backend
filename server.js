@@ -82,5 +82,5 @@ const port = process.env.PORT || 8080;
 (async () => {
   await supabase.from("people").select("id").limit(1);
   console.log("Supabase warmed");
-  app.listen(port, () => console.log("Family Tree app listening"));
+  app.listen(port, () => console.log("Family Tree app listening on port " + port));
 })();

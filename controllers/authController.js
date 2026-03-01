@@ -337,3 +337,18 @@ exports.resetPassword = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+
+exports.getAllRegisteredUsers = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("email, first_name, middle_name, last_name, birth_date");
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ users: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

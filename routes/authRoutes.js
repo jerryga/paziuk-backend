@@ -8,6 +8,7 @@ const {
   login,
   refresh,
   resetPassword,
+  getAllRegisteredUsers,
 } = require("../controllers/authController");
 
 const rateLimit = require("express-rate-limit");
@@ -35,5 +36,5 @@ router.post("/signup", validate(signupSchema), signup);
 router.post("/login", loginLimiter, validate(loginSchema), login);
 router.post("/refresh", refresh);
 router.post("/reset-password", resetPasswordLimiter, resetPassword);
-
+router.get("/get-all-users", getAllRegisteredUsers);
 module.exports = router;
