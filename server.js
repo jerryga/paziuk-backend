@@ -34,6 +34,20 @@ const allowedOrigins = [
   /^https?:\/\/127\.0\.0\.1(?::\d+)?$/,
 ];
 
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOrigins.some((allowed) =>
+      typeof allowed === "string" ? allowed === origin : allowed.test(origin),
+    );
+    return isAllowed
+      ? callback(null, true)
+      : callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Cache-Control"],
+};
+
 // Middleware
 app.use(
   helmet({
@@ -48,19 +62,8 @@ app.use(
   }),
 );
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const isAllowed = allowedOrigins.some((allowed) =>
-        typeof allowed === "string" ? allowed === origin : allowed.test(origin),
-      );
-      return isAllowed
-        ? callback(null, true)
-        : callback(new Error("Not allowed by CORS"));
-    },
-  }),
-);
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json({ limit: "200kb" }));
 
 // Routes

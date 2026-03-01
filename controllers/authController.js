@@ -290,6 +290,22 @@ exports.refresh = async (req, res) => {
   }
 };
 
+exports.getAllUsers = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("email, first_name, middle_name, last_name, birth_date")
+      .order("first_name", { ascending: true });
+
+    if (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.json({ users: data.filter(user => user.email !== "chasonjia.dev@gmail.com") || [] });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 // Request a password reset email via Supabase
 exports.resetPassword = async (req, res) => {
   const { email, redirectTo } = req.body || {};

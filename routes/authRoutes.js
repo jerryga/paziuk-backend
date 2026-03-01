@@ -7,8 +7,11 @@ const {
   signup,
   login,
   refresh,
+  getAllUsers,
   resetPassword,
 } = require("../controllers/authController");
+const authMiddleware = require("../middleware/auth");
+const { requireRole } = require("../middleware/role");
 
 const rateLimit = require("express-rate-limit");
 
@@ -34,6 +37,7 @@ const loginLimiter = rateLimit({
 router.post("/signup", validate(signupSchema), signup);
 router.post("/login", loginLimiter, validate(loginSchema), login);
 router.post("/refresh", refresh);
+router.get("/get-all-users", authMiddleware, requireRole("admin"), getAllUsers);
 router.post("/reset-password", resetPasswordLimiter, resetPassword);
 
 module.exports = router;
