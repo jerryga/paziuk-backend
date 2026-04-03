@@ -300,7 +300,10 @@ exports.getAllUsers = async (req, res) => {
     if (error) {
       return res.status(400).json({ error: error.message });
     }
-    return res.json({ users: data.filter(user => user.email !== "chasonjia.dev@gmail.com") || [] });
+    return res.json({
+      users:
+        data.filter((user) => user.email !== "chasonjia.dev@gmail.com") || [],
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

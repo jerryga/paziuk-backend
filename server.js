@@ -18,17 +18,9 @@ const app = express();
 // Trust proxy when deployed behind a proxy (CDN/load balancer)
 app.set("trust proxy", 1);
 
-// Global rate limiter to protect against abuse
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // limit each IP to 200 requests per windowMs
-  message: { error: "Too many requests, please try again later." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(globalLimiter);
-
 const allowedOrigins = [
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
   "https://paziuk.chasonjia-dev.workers.dev",
   /^https?:\/\/localhost(?::\d+)?$/,
   /^https?:\/\/127\.0\.0\.1(?::\d+)?$/,
@@ -46,6 +38,7 @@ const corsOptions = {
   },
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "Cache-Control"],
+  optionsSuccessStatus: 204,
 };
 
 // Middleware
@@ -64,6 +57,17 @@ app.use(
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
+
+// Global rate limiter to protect against abuse
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // limit each IP to 200 requests per windowMs
+  message: { error: "Too many requests, please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
 app.use(express.json({ limit: "200kb" }));
 
 // Routes
