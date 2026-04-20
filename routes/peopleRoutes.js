@@ -13,6 +13,9 @@ router.get("/", peopleController.getAllPeople);
 // Search people
 router.get("/search", peopleController.searchPeople);
 
+// Get all obituary records
+router.get("/obituaries", peopleController.getAllObituaries);
+
 // Get person by ID
 router.get("/:id", peopleController.getPersonById);
 router.get("/details/:id", peopleController.getPersonDetails);

@@ -52,6 +52,51 @@ exports.getAllPeople = async (req, res) => {
   }
 };
 
+exports.getAllObituaries = async (req, res) => {
+  try {
+    const { data: obituaries, error: obituaryError } = await supabase
+      .from("obituaries")
+      .select("id, person_id, content, updated_at")
+      .order("updated_at", { ascending: false });
+
+    if (obituaryError) throw obituaryError;
+
+    const personIds = [
+      ...new Set((obituaries || []).map((item) => item.person_id).filter(Boolean)),
+    ];
+    const peopleById = {};
+
+    if (personIds.length > 0) {
+      const { data: people, error: peopleError } = await supabase
+        .from("people")
+        .select("id, first_name, middle_name, last_name")
+        .in("id", personIds);
+
+      if (peopleError) throw peopleError;
+
+      (people || []).forEach((person) => {
+        peopleById[person.id] = formatPersonName(person);
+      });
+    }
+
+    const records = (obituaries || []).map((obituary) => {
+      const person = peopleById[obituary.person_id] || null;
+      return {
+        id: obituary.id,
+        person_id: obituary.person_id,
+        content: obituary.content || "",
+        updated_at: obituary.updated_at,
+        person,
+        person_name: person?.name || "Unknown",
+      };
+    });
+
+    res.json({ obituaries: records });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 exports.getPersonById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -350,7 +395,7 @@ exports.savePerson = async (req, res) => {
       return res.status(400).json({ error: "Invalid person ID" });
     }
 
-    const { story, birth_date, first_name, middle_name, last_name } =
+    const { story, obituary, birth_date, first_name, middle_name, last_name } =
       req.body || {};
 
     const updateData = {};
@@ -368,24 +413,73 @@ exports.savePerson = async (req, res) => {
     assignIfProvided("middle_name", middle_name);
     assignIfProvided("last_name", last_name);
 
-    if (Object.keys(updateData).length === 0) {
+    const hasPersonUpdate = Object.keys(updateData).length > 0;
+    const hasObituaryUpdate = obituary !== undefined;
+
+    if (!hasPersonUpdate && !hasObituaryUpdate) {
       return res.status(400).json({ error: "No fields provided to update" });
     }
 
-    const { data, error } = await supabase
-      .from("people")
-      .update(updateData)
-      .eq("id", personId)
-      .select()
-      .maybeSingle();
+    let savedPerson = null;
 
-    console.log("Save story update result:", error, personId);
+    if (hasPersonUpdate) {
+      const { data, error } = await supabase
+        .from("people")
+        .update(updateData)
+        .eq("id", personId)
+        .select()
+        .maybeSingle();
 
-    if (error) return res.status(400).json({ error: error.message });
-    if (!data)
+      console.log("Save person update result:", error, personId);
+
+      if (error) return res.status(400).json({ error: error.message });
+      savedPerson = data;
+    } else {
+      const { data, error } = await supabase
+        .from("people")
+        .select("id")
+        .eq("id", personId)
+        .maybeSingle();
+
+      if (error) return res.status(400).json({ error: error.message });
+      savedPerson = data;
+    }
+
+    if (!savedPerson) {
       return res.status(404).json({ error: "Person not found! Try again." });
+    }
 
-    return res.json(data);
+    if (hasObituaryUpdate) {
+      const obituaryText = String(obituary || "").trim();
+
+      if (obituaryText) {
+        const { error: obituaryError } = await supabase
+          .from("obituaries")
+          .upsert(
+            {
+              person_id: personId,
+              content: obituaryText,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "person_id" },
+          );
+
+        if (obituaryError) {
+          return res.status(400).json({ error: obituaryError.message });
+        }
+      } else {
+        const { error: obituaryError } = await supabase
+          .from("obituaries")
+          .delete()
+          .eq("person_id", personId);
+
+        if (obituaryError) {
+          return res.status(400).json({ error: obituaryError.message });
+        }
+      }
+    }
+
+    return res.json(savedPerson);
   } catch (err) {
     console.error("Error saving person:", err);
     return res.status(400).json({ error: err.message });
@@ -528,10 +622,25 @@ exports.getPersonDetails = async (req, res) => {
       });
     }
 
-    // Render Story
+    const { data: obituaryRow, error: obituaryError } = await supabase
+      .from("obituaries")
+      .select("content")
+      .eq("person_id", id)
+      .maybeSingle();
+
+    if (obituaryError) throw obituaryError;
+
+    const obituary = obituaryRow?.content || "";
+
+    // Render Story and Obituary
     let storyHTML = "";
     if (person.story) {
       storyHTML = (await renderStoryToHTML(person.story)) || "";
+    }
+
+    let obituaryHTML = "";
+    if (obituary) {
+      obituaryHTML = (await renderStoryToHTML(obituary)) || "";
     }
 
     res.json({
@@ -544,6 +653,8 @@ exports.getPersonDetails = async (req, res) => {
       role: person.role,
       story: person.story || "",
       storyHTML,
+      obituary,
+      obituaryHTML,
       current_generation, // The sorted list including self and siblings
       ancestral_generations,
     });
