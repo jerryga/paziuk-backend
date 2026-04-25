@@ -37,4 +37,11 @@ router.delete("/:id", requireRole("admin"), peopleController.deletePerson);
 
 router.put("/save/:id", requireRole("admin"), peopleController.savePerson);
 
+// Reassign an existing obituary to this person (overwrites any existing obituary on this person)
+router.put(
+  "/:id/link-obituary",
+  requireRole("admin"),
+  peopleController.linkObituary,
+);
+
 module.exports = router;

@@ -97,6 +97,94 @@ exports.getAllObituaries = async (req, res) => {
   }
 };
 
+exports.linkObituary = async (req, res) => {
+  const personId = Number(req.params.id);
+  const obituaryId = Number(req.body?.obituaryId);
+
+  if (Number.isNaN(personId)) {
+    return res.status(400).json({ error: "Invalid person ID" });
+  }
+  if (Number.isNaN(obituaryId)) {
+    return res.status(400).json({ error: "Invalid obituary ID" });
+  }
+
+  try {
+    const { data: person, error: personError } = await supabase
+      .from("people")
+      .select("id")
+      .eq("id", personId)
+      .maybeSingle();
+
+    if (personError) throw personError;
+    if (!person) {
+      return res.status(404).json({ error: "Person not found" });
+    }
+
+    const { data: obituary, error: obituaryLookupError } = await supabase
+      .from("obituaries")
+      .select("id, person_id")
+      .eq("id", obituaryId)
+      .maybeSingle();
+
+    if (obituaryLookupError) throw obituaryLookupError;
+    if (!obituary) {
+      return res.status(404).json({ error: "Obituary not found" });
+    }
+
+    if (obituary.person_id === personId) {
+      return res.json({ message: "Obituary already linked to this person" });
+    }
+
+    // Unlink (set person_id = NULL) any existing obituary on the target person
+    // instead of deleting it, so the displaced obituary remains recoverable as
+    // an orphan and is visible at /pages/obituary.html?id=null.
+    const { data: displacedRows, error: displaceError } = await supabase
+      .from("obituaries")
+      .update({ person_id: null, updated_at: new Date().toISOString() })
+      .eq("person_id", personId)
+      .select();
+
+    if (displaceError) throw displaceError;
+
+    const { data: updatedRows, error: updateError } = await supabase
+      .from("obituaries")
+      .update({
+        person_id: personId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", obituaryId)
+      .select();
+
+    if (updateError) throw updateError;
+
+    if (!updatedRows || updatedRows.length === 0) {
+      console.error("linkObituary: update affected 0 rows", {
+        personId,
+        obituaryId,
+      });
+      return res
+        .status(500)
+        .json({ error: "Obituary update affected no rows." });
+    }
+
+    console.log("linkObituary success", {
+      personId,
+      obituaryId,
+      displacedCount: displacedRows?.length || 0,
+      updatedRow: updatedRows[0],
+    });
+
+    return res.json({
+      message: "Obituary linked",
+      obituary: updatedRows[0],
+      displacedExisting: (displacedRows?.length || 0) > 0,
+    });
+  } catch (error) {
+    console.error("Error linking obituary:", error);
+    return res.status(500).json({ error: "Failed to link obituary" });
+  }
+};
+
 exports.getPersonById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -490,6 +578,8 @@ exports.savePerson = async (req, res) => {
 exports.getPersonDetails = async (req, res) => {
   const id = Number(req.params.id);
   const mode = req.query.mode;
+
+  res.set("Cache-Control", "no-store");
 
   try {
     // 1. Fetch current person
