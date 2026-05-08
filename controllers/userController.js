@@ -10,7 +10,7 @@ exports.getNonAdminUsers = async (req, res) => {
   const { data, error } = await supabase
     .from("users")
     .select("id, email, first_name, middle_name, last_name, birth_date, role")
-    .neq("role", "admin")
+    .or("role.is.null,role.neq.admin")
     .order("first_name", { ascending: true });
   if (error) return res.status(400).json({ error: error.message });
   res.json({ users: data || [] });
