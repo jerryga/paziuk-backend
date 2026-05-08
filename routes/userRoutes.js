@@ -4,6 +4,7 @@ const authMiddleware = require("../middleware/auth");
 const { requireRole } = require("../middleware/role");
 const {
   getUsers,
+  getNonAdminUsers,
   createUser,
   updateUser,
   deleteUser,
@@ -14,6 +15,7 @@ router.use(authMiddleware);
 
 // Admin-only routes
 router.get("/", requireRole("admin"), getUsers);
+router.get("/non-admin", requireRole("admin"), getNonAdminUsers);
 router.post("/", requireRole("admin"), createUser);
 router.delete("/:id", requireRole("admin"), deleteUser);
 
