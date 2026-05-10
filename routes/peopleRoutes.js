@@ -16,6 +16,20 @@ router.get("/search", peopleController.searchPeople);
 // Get all obituary records
 router.get("/obituaries", peopleController.getAllObituaries);
 
+// Create a new (unlinked) obituary
+router.post(
+  "/obituaries",
+  requireRole("admin"),
+  peopleController.createObituary,
+);
+
+// Delete an obituary (unlinks from person automatically since the row is removed)
+router.delete(
+  "/obituaries/:id",
+  requireRole("admin"),
+  peopleController.deleteObituary,
+);
+
 // Get person by ID
 router.get("/:id", peopleController.getPersonById);
 router.get("/details/:id", peopleController.getPersonDetails);

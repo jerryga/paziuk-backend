@@ -97,6 +97,55 @@ exports.getAllObituaries = async (req, res) => {
   }
 };
 
+exports.createObituary = async (req, res) => {
+  const content = String(req.body?.content || "").trim();
+  if (!content) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("obituaries")
+      .insert([
+        {
+          content,
+          person_id: null,
+          updated_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(201).json({ obituary: data });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.deleteObituary = async (req, res) => {
+  const obituaryId = Number(req.params.id);
+  if (Number.isNaN(obituaryId)) {
+    return res.status(400).json({ error: "Invalid obituary ID" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("obituaries")
+      .delete()
+      .eq("id", obituaryId)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: "Obituary not found" });
+    }
+    res.json({ message: "Obituary deleted", obituary: data[0] });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 exports.linkObituary = async (req, res) => {
   const personId = Number(req.params.id);
   const obituaryId = Number(req.body?.obituaryId);
