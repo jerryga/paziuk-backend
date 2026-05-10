@@ -123,6 +123,37 @@ exports.createObituary = async (req, res) => {
   }
 };
 
+exports.updateObituary = async (req, res) => {
+  const obituaryId = Number(req.params.id);
+  const content = String(req.body?.content || "").trim();
+
+  if (Number.isNaN(obituaryId)) {
+    return res.status(400).json({ error: "Invalid obituary ID" });
+  }
+  if (!content) {
+    return res.status(400).json({ error: "Content is required" });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("obituaries")
+      .update({
+        content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", obituaryId)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: "Obituary not found" });
+    }
+    res.json({ message: "Obituary updated", obituary: data[0] });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 exports.deleteObituary = async (req, res) => {
   const obituaryId = Number(req.params.id);
   if (Number.isNaN(obituaryId)) {
@@ -763,13 +794,14 @@ exports.getPersonDetails = async (req, res) => {
 
     const { data: obituaryRow, error: obituaryError } = await supabase
       .from("obituaries")
-      .select("content")
+      .select("id, content")
       .eq("person_id", id)
       .maybeSingle();
 
     if (obituaryError) throw obituaryError;
 
     const obituary = obituaryRow?.content || "";
+    const obituary_id = obituaryRow?.id || null;
 
     // Render Story and Obituary
     let storyHTML = "";
@@ -793,6 +825,7 @@ exports.getPersonDetails = async (req, res) => {
       story: person.story || "",
       storyHTML,
       obituary,
+      obituary_id,
       obituaryHTML,
       current_generation, // The sorted list including self and siblings
       ancestral_generations,

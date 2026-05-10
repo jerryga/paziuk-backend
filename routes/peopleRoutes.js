@@ -23,6 +23,13 @@ router.post(
   peopleController.createObituary,
 );
 
+// Update an obituary's content
+router.put(
+  "/obituaries/:id",
+  requireRole("admin"),
+  peopleController.updateObituary,
+);
+
 // Delete an obituary (unlinks from person automatically since the row is removed)
 router.delete(
   "/obituaries/:id",
