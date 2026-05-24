@@ -1,5 +1,5 @@
 const supabase = require("../supabaseClient");
-const SESSION_DURATION = 14400000; // 4 hours
+const SESSION_DURATION = 7200000; // 2 hours
 
 function normalizeBirthDateForDb(value) {
   if (value === undefined || value === null) return null;
