@@ -50,8 +50,6 @@ exports.signup = async (req, res) => {
       middle_name !== ""
     ) {
       query = query.ilike("middle_name", middle_name);
-    } else {
-      query = query.is("middle_name", null);
     }
 
     if (last_name !== null && last_name !== undefined && last_name !== "") {
